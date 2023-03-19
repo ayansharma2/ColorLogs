@@ -1,4 +1,4 @@
-module ayan/colorlogs
+module github.com/ayansharma2/ColorLogs
 
 go 1.19
 
