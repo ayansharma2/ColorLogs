@@ -15,11 +15,18 @@ func main() {
 
 	for {
 		var c = make([]byte, 1)
-		os.Stdin.Read(c)
-		if c == nil {
+		_, err := os.Stdin.Read(c)
+		if err != nil {
 			return
 		}
-		if string(c) == "{" && !isInString {
+		var jsonString map[string]interface{}
+		json.Unmarshal([]byte(first), &jsonString)
+		_, err = json.MarshalIndent(jsonString, "", "   ")
+		if err != nil && string(c) == "{" && !isInString {
+			fmt.Println("Error Found :", err)
+			fmt.Println(color.With(color.Blue, first))
+			first = ""
+		} else if string(c) == "{" && !isInString {
 			bracketCount++
 		} else if string(c) == "}" && !isInString {
 			bracketCount--
@@ -51,7 +58,6 @@ func main() {
 				fmt.Println(string(b))
 			}
 			first = ""
-
 		}
 	}
 }
