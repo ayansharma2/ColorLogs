@@ -11,93 +11,73 @@ import (
 )
 
 func main() {
-	var buffer string
+	var first string
 	var bracketCount = 0
 	var isInString = false
 
 	for {
-		c := make([]byte, 1)
+		var c = make([]byte, 1)
 		_, err := os.Stdin.Read(c)
 		if err != nil {
 			return
 		}
-
-		ch := string(c)
-
-		// Skip empty chars
-		if strings.TrimSpace(ch) == "" {
+		if strings.Trim(string(c), "") == "" {
 			continue
 		}
-
-		// Track JSON structure
-		if ch == "{" && !isInString {
+		var jsonString map[string]interface{}
+		err = json.Unmarshal([]byte(first), &jsonString)
+		if err != nil && bracketCount == 0 && string(c) == "{" && !isInString && strings.Trim(first, "") != "" {
+			fmt.Println(color.With(color.Blue, "\n****************\n"+first+"\n****************\n"))
+			first = ""
+		}
+		if string(c) == "{" && !isInString {
 			bracketCount++
-		} else if ch == "}" && !isInString {
+		} else if string(c) == "}" && !isInString {
 			bracketCount--
-		} else if ch == `"` && (len(buffer) == 0 || buffer[len(buffer)-1] != '\\') {
+		} else if string(c) == "\"" && len(first)-1 >= 0 && first[len(first)-1] != '\\' {
 			isInString = !isInString
 		}
+		first += string(c)
+		first = strings.TrimPrefix(first, "\n")
 
-		buffer += ch
-		buffer = strings.TrimPrefix(buffer, "\n")
+		if bracketCount == 0 && first != "" {
+			var jsonString map[string]interface{}
+			err := json.Unmarshal([]byte(first), &jsonString)
 
-		// If full JSON object read
-		if bracketCount == 0 && buffer != "" {
+			if err == nil && jsonString != nil {
+				if tsVal, ok := jsonString["ts"]; ok {
+					// JSON numbers come as float64
+					tsFloat, ok := tsVal.(float64)
+					if ok {
+						tsMillis := int64(tsFloat)
 
-			var jsonMap map[string]interface{}
-			err := json.Unmarshal([]byte(buffer), &jsonMap)
+						// Convert milliseconds → time.Time
+						t := time.UnixMilli(tsMillis)
 
-			if err != nil {
-				// Print raw if not valid JSON
-				fmt.Println(color.With(color.Blue, "\n****************\n"+buffer+"\n****************\n"))
-				buffer = ""
-				continue
-			}
-
-			// ✅ Convert ts → formatted time
-			if tsVal, ok := jsonMap["ts"]; ok {
-				if tsFloat, ok := tsVal.(float64); ok {
-					tsMillis := int64(tsFloat)
-
-					// Convert milliseconds → time
-					t := time.UnixMilli(tsMillis)
-
-					// Convert to IST
-					loc, err := time.LoadLocation("Asia/Kolkata")
-					if err == nil {
+						// Convert to IST (optional)
+						loc, _ := time.LoadLocation("Asia/Kolkata")
 						t = t.In(loc)
+
+						jsonString["ts.formatted"] = t.Format("02/01/2006 15:04:05")
 					}
-
-					jsonMap["ts.formatted"] = t.Format("02/01/2006 15:04:05")
 				}
 			}
+			b, err1 := json.MarshalIndent(jsonString, "", "   ")
+			finalVal := strings.Replace(string(b), `\n`, "\n\t", -1)
+			finalVal = strings.Replace(finalVal, `\t`, "\t", -1)
 
-			// Pretty print JSON
-			b, err := json.MarshalIndent(jsonMap, "", "   ")
-			if err != nil {
-				fmt.Println(buffer)
-				buffer = ""
-				continue
-			}
-
-			output := string(b)
-			output = strings.ReplaceAll(output, `\n`, "\n\t")
-
-			// Color based on log level
-			if level, ok := jsonMap["level"].(string); ok {
-				switch level {
-				case "error":
-					fmt.Println(color.With(color.Red, output))
-				case "warn":
-					fmt.Println(color.With(color.Yellow, output))
-				default:
-					fmt.Println(output)
+			if string(b) != "null" {
+				if strings.HasPrefix(first, "{\"level\":\"error\"") {
+					fmt.Println(color.With(color.Red, finalVal))
+				} else if strings.HasPrefix(first, "{\"level\":\"warn\"") {
+					fmt.Println(color.With(color.Yellow, finalVal))
+				} else {
+					fmt.Println(string(b))
 				}
-			} else {
-				fmt.Println(output)
 			}
-
-			buffer = ""
+			if err == nil && err1 == nil {
+				first = ""
+			}
 		}
 	}
 }
