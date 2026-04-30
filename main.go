@@ -3,65 +3,101 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/TwiN/go-color"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/TwiN/go-color"
 )
 
 func main() {
-	var first string
+	var buffer string
 	var bracketCount = 0
 	var isInString = false
 
 	for {
-		var c = make([]byte, 1)
+		c := make([]byte, 1)
 		_, err := os.Stdin.Read(c)
 		if err != nil {
 			return
 		}
-		if strings.Trim(string(c), "") == "" {
+
+		ch := string(c)
+
+		// Skip empty chars
+		if strings.TrimSpace(ch) == "" {
 			continue
 		}
-		var jsonString map[string]interface{}
-		err = json.Unmarshal([]byte(first), &jsonString)
-		if err != nil && bracketCount == 0 && string(c) == "{" && !isInString && strings.Trim(first, "") != "" {
-			fmt.Println(color.With(color.Blue, "\n****************\n"+first+"\n****************\n"))
-			first = ""
-		}
-		if string(c) == "{" && !isInString {
+
+		// Track JSON structure
+		if ch == "{" && !isInString {
 			bracketCount++
-		} else if string(c) == "}" && !isInString {
+		} else if ch == "}" && !isInString {
 			bracketCount--
-		} else if string(c) == "\"" && len(first)-1 >= 0 && first[len(first)-1] != '\\' {
+		} else if ch == `"` && (len(buffer) == 0 || buffer[len(buffer)-1] != '\\') {
 			isInString = !isInString
 		}
-		first += string(c)
-		first = strings.TrimPrefix(first, "\n")
 
-		if bracketCount == 0 && first != "" {
-			currentTime := time.Now()
-			var jsonString map[string]interface{}
-			err := json.Unmarshal([]byte(first), &jsonString)
-			if jsonString != nil {
-				jsonString["ts.formatted"] = currentTime.Format(`2/01/2006 15:04:05`)
+		buffer += ch
+		buffer = strings.TrimPrefix(buffer, "\n")
+
+		// If full JSON object read
+		if bracketCount == 0 && buffer != "" {
+
+			var jsonMap map[string]interface{}
+			err := json.Unmarshal([]byte(buffer), &jsonMap)
+
+			if err != nil {
+				// Print raw if not valid JSON
+				fmt.Println(color.With(color.Blue, "\n****************\n"+buffer+"\n****************\n"))
+				buffer = ""
+				continue
 			}
-			b, err1 := json.MarshalIndent(jsonString, "", "   ")
-			finalVal := strings.Replace(string(b), `\n`, "\n\t", -1)
-			finalVal = strings.Replace(finalVal, `\t`, "\t", -1)
 
-			if string(b) != "null" {
-				if strings.HasPrefix(first, "{\"level\":\"error\"") {
-					fmt.Println(color.With(color.Red, finalVal))
-				} else if strings.HasPrefix(first, "{\"level\":\"warn\"") {
-					fmt.Println(color.With(color.Yellow, finalVal))
-				} else {
-					fmt.Println(string(b))
+			// ✅ Convert ts → formatted time
+			if tsVal, ok := jsonMap["ts"]; ok {
+				if tsFloat, ok := tsVal.(float64); ok {
+					tsMillis := int64(tsFloat)
+
+					// Convert milliseconds → time
+					t := time.UnixMilli(tsMillis)
+
+					// Convert to IST
+					loc, err := time.LoadLocation("Asia/Kolkata")
+					if err == nil {
+						t = t.In(loc)
+					}
+
+					jsonMap["ts.formatted"] = t.Format("02/01/2006 15:04:05")
 				}
 			}
-			if err == nil && err1 == nil {
-				first = ""
+
+			// Pretty print JSON
+			b, err := json.MarshalIndent(jsonMap, "", "   ")
+			if err != nil {
+				fmt.Println(buffer)
+				buffer = ""
+				continue
 			}
+
+			output := string(b)
+			output = strings.ReplaceAll(output, `\n`, "\n\t")
+
+			// Color based on log level
+			if level, ok := jsonMap["level"].(string); ok {
+				switch level {
+				case "error":
+					fmt.Println(color.With(color.Red, output))
+				case "warn":
+					fmt.Println(color.With(color.Yellow, output))
+				default:
+					fmt.Println(output)
+				}
+			} else {
+				fmt.Println(output)
+			}
+
+			buffer = ""
 		}
 	}
 }
