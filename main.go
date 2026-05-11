@@ -26,8 +26,10 @@ func main() {
 		}
 		var jsonString map[string]interface{}
 		err = json.Unmarshal([]byte(first), &jsonString)
-		if err != nil && bracketCount == 0 && string(c) == "{" && !isInString && strings.Trim(first, "") != "" {
-			fmt.Println(color.With(color.Blue, "\n****************\n"+first+"\n****************\n"))
+		if err != nil && bracketCount == 0 && string(c) == "{" && !isInString {
+			if strings.TrimSpace(first) != "" {
+				fmt.Println(color.With(color.Blue, "\n****************\n"+first+"\n****************\n"))
+			}
 			first = ""
 		}
 		if string(c) == "{" && !isInString {
@@ -67,12 +69,14 @@ func main() {
 			finalVal = strings.Replace(finalVal, `\t`, "\t", -1)
 
 			if string(b) != "null" {
-				if strings.HasPrefix(first, "{\"level\":\"error\"") {
+				level, _ := jsonString["level"].(string)
+				switch strings.ToLower(level) {
+				case "error", "err", "fatal", "critical":
 					fmt.Println(color.With(color.Red, finalVal))
-				} else if strings.HasPrefix(first, "{\"level\":\"warn\"") {
+				case "warn", "warning":
 					fmt.Println(color.With(color.Yellow, finalVal))
-				} else {
-					fmt.Println(string(b))
+				default:
+					fmt.Println(finalVal)
 				}
 			}
 			if err == nil && err1 == nil {
