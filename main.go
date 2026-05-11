@@ -67,12 +67,14 @@ func main() {
 			finalVal = strings.Replace(finalVal, `\t`, "\t", -1)
 
 			if string(b) != "null" {
-				if strings.HasPrefix(first, "{\"level\":\"error\"") {
+				level, _ := jsonString["level"].(string)
+				switch strings.ToLower(level) {
+				case "error", "err", "fatal", "critical":
 					fmt.Println(color.With(color.Red, finalVal))
-				} else if strings.HasPrefix(first, "{\"level\":\"warn\"") {
+				case "warn", "warning":
 					fmt.Println(color.With(color.Yellow, finalVal))
-				} else {
-					fmt.Println(string(b))
+				default:
+					fmt.Println(finalVal)
 				}
 			}
 			if err == nil && err1 == nil {
