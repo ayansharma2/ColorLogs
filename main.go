@@ -26,8 +26,10 @@ func main() {
 		}
 		var jsonString map[string]interface{}
 		err = json.Unmarshal([]byte(first), &jsonString)
-		if err != nil && bracketCount == 0 && string(c) == "{" && !isInString && strings.Trim(first, "") != "" {
-			fmt.Println(color.With(color.Blue, "\n****************\n"+first+"\n****************\n"))
+		if err != nil && bracketCount == 0 && string(c) == "{" && !isInString {
+			if strings.TrimSpace(first) != "" {
+				fmt.Println(color.With(color.Blue, "\n****************\n"+first+"\n****************\n"))
+			}
 			first = ""
 		}
 		if string(c) == "{" && !isInString {
